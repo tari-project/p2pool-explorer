@@ -25,15 +25,19 @@ app.get('/', async (req, res) => {
         let rxTip = tipData.randomx_stats.height;
 
         let page = 10;
-        let from_rx = Math.max(rxTip - page, 0);
-        let from_sha = Math.max(shaTip - page, 0);
+        // Take an extra 5 so that we can find the previous block for hashrate calc
+        let from_rx = Math.max(rxTip - page - 5, 0);
+        let from_sha = Math.max(shaTip - page - 5, 0);
 
         let data = { sha3x: [], randomX: [] };
-        const response = await axios.get(`${P2POOL_URL}/chain?algo=randomx&height=${from_rx}&count=${page}`);
-        data.randomX = response.data.reverse();
+        let actual_page = page + 5
+        const response = await axios.get(`${P2POOL_URL}/chain?algo=randomx&height=${from_rx}&count=${actual_page}`);
+        calcHashrates(response.data);
+        data.randomX = response.data.reverse().slice(0, page);
 
-        const response2 = await axios.get(`${P2POOL_URL}/chain?algo=sha3x&height=${from_sha}&count=${page}`);
-        data.sha3x = response2.data.reverse();
+        const response2 = await axios.get(`${P2POOL_URL}/chain?algo=sha3x&height=${from_sha}&count=${actual_page}`);
+        calcHashrates(response2.data);
+        data.sha3x = response2.data.reverse().slice(0, page);
         res.render('index', { data });
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -49,10 +53,14 @@ app.get('/blocks', async (req, res) => {
         let algo = req.query.algo;
         let height = Math.max(0, req.query.height || 0);
         let page = req.query.page || 10;
+        let actualPage = page * 1 + 5;
 
         let data = { page: page, algo: algo, height: height };
-        const response = await axios.get(`${P2POOL_URL}/chain?algo=${algo}&height=${height}&count=${page}`);
-        data.blocks = response.data.reverse();
+        let from = Math.max(height - 5, 0);
+
+        const response = await axios.get(`${P2POOL_URL}/chain?algo=${algo}&height=${from}&count=${actualPage}`);
+        calcHashrates(response.data);
+        data.blocks = response.data.reverse().slice(0, page);
 
         res.render('blocks', { data });
     } catch (error) {
@@ -60,6 +68,28 @@ app.get('/blocks', async (req, res) => {
         res.status(500).send('Error fetching data');
     }
 });
+
+
+function calcHashrates(data) {
+    let blocks = {};
+    for (let i = 0; i < data.length; i++) {
+        blocks[data[i].hash] = data[i];
+    }
+
+    for (let i = 1; i < data.length; i++) {
+        let block = data[i];
+        let prev_block = blocks[block.prev_hash];
+        if (!prev_block) {
+            console.error("Missing previous block", block.prev_hash);
+            continue
+        }
+        // let diff = block.target_difficulty - prev_block.target_difficulty;
+        // let time = block.timestamp - prev_block.timestamp;
+        let hashrate = block.target_difficulty / 10;
+        block.hashrate = hashrate;
+    }
+}
+
 
 // Start the server
 app.listen(PORT, () => {

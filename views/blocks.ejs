@@ -20,6 +20,7 @@
                 <th>Miner Wallet Address</th>
                 <th>Sent to Main Chain</th>
                 <th>Target Difficulty</th>
+                <th>Pool Hashrate (Not accurate)</th>
                 <th>Candidate Block Height</th>
                 <th>Algorithm</th>
             </tr>
@@ -52,6 +53,11 @@
                         <%= block.target_difficulty %>
                     </td>
                     <td>
+                        <%= data.algo==="randomx" ? (block.hashrate / 1e3).toFixed(2) : (block.hashrate /
+                            1e6).toFixed(2) %>
+                            <%= data.algo==="randomx" ? "KH/s" : "MH/s" %>
+                    </td>
+                    <td>
                         <%= block.candidate_block_height %>
                     </td>
                     <td>
@@ -62,10 +68,12 @@
         </tbody>
     </table>
     <a
-        href="/blocks?algo=<%=data.algo%>&height=<%=data.blocks[data.blocks.length-1].height + 1 * data.page%>&page=<%= data.page %>">Prev</a>
+        href="/blocks?algo=<%=data.algo%>&height=<%=data.blocks[data.blocks.length-1].height + 1 * data.page%>&page=<%= data.page %>">Newer
+        Blocks</a>
     <a href="/">Tip</a>
     <a
-        href="/blocks?algo=<%=data.algo%>&height=<%=data.blocks[data.blocks.length-1].height - data.page%>&page=<%= data.page %>">Next</a>
+        href="/blocks?algo=<%=data.algo%>&height=<%=data.blocks[data.blocks.length-1].height - data.page%>&page=<%= data.page %>">Older
+        Blocks</a>
 </body>
 
 </html>
