@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Table</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+    <h1>RandomX Chain Data</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Hash</th>
+                <th>Timestamp</th>
+                <th>Previous Hash</th>
+                <th>Height</th>
+                <th>Miner Wallet Address</th>
+                <th>Sent to Main Chain</th>
+                <th>Target Difficulty</th>
+                <th>Candidate Block Height</th>
+                <th>Algorithm</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% data.randomX.forEach(block=> { %>
+                <tr>
+                    <th>
+                        <%= block.height %>
+                    </th>
+                    <td>
+                        <%= block.hash.substring(0, 8) %>...
+                    </td>
+                    <td>
+                        <%= new Date(block.timestamp * 1000).toLocaleString() %>
+                    </td>
+                    <td>
+                        <%= block.prev_hash.substring(0, 8) %>...
+                    </td>
+
+                    <td>
+                        <%= block.miner_wallet_address.substring(0,8) %>..<%=
+                                block.miner_wallet_address.substring(block.miner_wallet_address.length-8,
+                                block.miner_wallet_address.length) %>
+                    </td>
+                    <td>
+                        <%= block.sent_to_main_chain %>
+                    </td>
+                    <td>
+                        <%= block.target_difficulty %>
+                    </td>
+                    <td>
+                        <%= block.candidate_block_height %>
+                    </td>
+                    <td>
+                        <%= block.algo %>
+                    </td>
+                </tr>
+                <% }) %>
+        </tbody>
+    </table>
+
+    <a href="/blocks?algo=randomx&height=<%=data.randomX[data.randomX.length-1].height%>">Next</a>
+
+
+    <h1>Sha3x Chain Data</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Hash</th>
+                <th>Timestamp</th>
+                <th>Previous Hash</th>
+                <th>Height</th>
+                <th>Miner Wallet Address</th>
+                <th>Sent to Main Chain</th>
+                <th>Target Difficulty</th>
+                <th>Candidate Block Height</th>
+                <th>Algorithm</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% data.sha3x.forEach(block=> { %>
+                <tr>
+                    <th>
+                        <%= block.height %>
+                    </th>
+                    <td>
+                        <%= block.hash.substring(0,8) %>...
+                    </td>
+                    <td>
+                        <%= new Date(block.timestamp * 1000).toLocaleString() %>
+                    </td>
+                    <td>
+                        <%= block.prev_hash.substring(0,8) %>...
+                    </td>
+
+                    <td>
+                        <%= block.miner_wallet_address.substring(0,8) %>..<%=
+                                block.miner_wallet_address.substring(block.miner_wallet_address.length-8,
+                                block.miner_wallet_address.length) %>
+                    </td>
+                    <td>
+                        <%= block.sent_to_main_chain %>
+                    </td>
+                    <td>
+                        <%= block.target_difficulty %>
+                    </td>
+                    <td>
+                        <%= block.candidate_block_height %>
+                    </td>
+                    <td>
+                        <%= block.algo %>
+                    </td>
+                </tr>
+                <% }) %>
+        </tbody>
+    </table>
+    <a href="/blocks?algo=randomx&height=<%=data.randomX[data.randomX.length-1].height%>">Next</a>
+</body>
+
+</html>
+</body>
+
+</html>
