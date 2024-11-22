@@ -3,9 +3,10 @@ const axios = require('axios');
 const path = require('path');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-const P2POOL_URL = "http://127.0.0.1:19000";
+const P2POOL_URL = process.env.P2POOL_URL || "http://127.0.0.1:19000";
+
 // Set EJS as the templating engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
