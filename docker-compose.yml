@@ -1,0 +1,16 @@
+---
+version: '3.7'
+services:
+  p2pool-explorer:
+    container_name: p2pool-explorer
+    image: quay.io/tarilabs/p2pool-explorer
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - P2POOL_URL=http://p2pool-node:19000
+
+  p2pool-node:
+    container_name: p2pool-node
+    image: quay.io/tarilabs/sha-p2pool:v0.9.2
+    restart: unless-stopped

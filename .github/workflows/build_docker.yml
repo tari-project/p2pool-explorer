@@ -1,0 +1,180 @@
+---
+name: Build p2pool explorer docker image
+
+'on':
+  push:
+    paths-ignore:
+      - '**/*.md'
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]*'
+    branches:
+      # - 'build_dockers*'
+      - 'build-*'
+  schedule:
+    - cron: '05 00 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        description: 'override image tag/version'
+      tag_alias:
+        type: string
+        description: 'image tag alias'
+
+env:
+  DOCKER_IMAGE: p2pool-explorer
+  DAYS_to_EXPIRE: 30
+
+concurrency:
+  # https://docs.github.com/en/actions/examples/using-concurrency-expressions-and-a-test-matrix
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') || github.ref != 'refs/heads/main' }}
+
+permissions: {}
+
+jobs:
+  docker_build:
+    name: Docker building
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [amd64, arm64]
+
+    steps:
+      - name: Checkout p2pool explorer
+        uses: actions/checkout@v4
+
+      - name: Setup expiration for scheduled builds
+        if: ${{ ( github.event_name == 'schedule' && github.event.schedule == '05 00 * * *' ) || ( ! startsWith(github.ref, 'refs/tags/v') ) }}
+        shell: bash
+        run: |
+          echo "EXPIRATION=${{ env.DAYS_to_EXPIRE }}d" >> $GITHUB_ENV
+
+      - name: Prep docker build environment
+        shell: bash
+        run: |
+            ls -alht
+            TEBRANCH=$(git branch --show-current)
+            TESHA_SHORT=$(git rev-parse --short HEAD)
+            if [ -z "${{ inputs.version }}" ] ; then
+              VERSION="${TEBRANCH}_$(date -u '+%Y%m%d')_${TESHA_SHORT}"
+            else
+              VERSION=${{ inputs.version }}
+            fi
+            echo "Setting ${VERSION} as docker tag"
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
+            if [ ! -z "${{ inputs.tag_alias }}" ] ; then
+              echo "Setup tag_alias"
+              echo "TAG_ALIAS=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ env.DOCKER_IMAGE }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
+            fi
+
+      - name: Set up QEMU for Docker
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.DOCKER_IMAGE }}
+            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+          labels: |
+            maintainer=${{ github.actor }}
+            quay.expires-after=${{ env.EXPIRATION }}
+            org.opencontainers.image.vendor=TariLabs
+            org.opencontainers.image.title=${{ env.DOCKER_IMAGE }}
+            org.opencontainers.image.description=Multi-arch Docker image for ${{ env.DOCKER_IMAGE }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          flavor: |
+            suffix=-${{ matrix.platform }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Image Provider
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_PROVIDER }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Docker image build and push
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.platform }}
+          push: true
+          provenance: false
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}-${{ matrix.platform }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.DOCKER_IMAGE }}:${{ matrix.platform }}
+            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ env.DOCKER_IMAGE }}:${{ matrix.platform }}
+            ${{ env.TAG_ALIAS }}
+          outputs: |
+            type=registry,annotation-manifest-descriptor.org.opencontainers.image.title=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.title'] }},annotation-manifest-descriptor.org.opencontainers.image.description=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.description'] }},annotation.org.opencontainers.image.title=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.title'] }},annotation.org.opencontainers.image.description=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.description'] }},annotation-index.org.opencontainers.image.title=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.title'] }},annotation-index.org.opencontainers.image.description=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.description'] }}
+
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
+
+  create-manifest:
+    needs: docker_build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to Registries
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ secrets.DOCKER_PROVIDER }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+      # Create and push the multi-arch image to both registries
+      - name: Push multi-arch image
+        run: |
+          for registry in ghcr.io quay.io; do
+            if [[ "${registry}" == "ghcr.io" ]]; then
+              repo="${{ github.repository_owner }}"
+            else
+              repo="${{ secrets.DOCKER_REPO }}"
+            fi
+
+            echo "Creating multi-arch image for ${repo}/${{ env.DOCKER_IMAGE }}"
+            docker manifest create \
+              ${registry}/${repo}/${{ env.DOCKER_IMAGE }}:latest \
+              ${registry}/${repo}/${{ env.DOCKER_IMAGE }}:amd64 \
+              ${registry}/${repo}/${{ env.DOCKER_IMAGE }}:arm64
+
+            echo "Inspect multi-arch image for ${repo}/${{ env.DOCKER_IMAGE }}"
+            docker manifest inspect --verbose ${registry}/${repo}/${{ env.DOCKER_IMAGE }}:latest
+
+            echo "Pusing multi-arch image for ${repo}/${{ env.DOCKER_IMAGE }}"
+            docker manifest push ${registry}/${repo}/${{ env.DOCKER_IMAGE }}:latest || true
+          done
